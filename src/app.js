@@ -72,7 +72,23 @@ export function createApp(db) {
     });
   }
 
-  return createServer((req, res) => {
+  let activeRequests = 0;
+  let databaseClosed = false;
+  const closeDatabase = () => {
+    if (databaseClosed) return;
+    databaseClosed = true;
+    db.close();
+  };
+  const server = createServer((req, res) => {
+    activeRequests += 1;
+    let finished = false;
+    const releaseRequest = () => {
+      if (finished) return;
+      finished = true;
+      activeRequests -= 1;
+    };
+    res.once('finish', releaseRequest);
+    res.once('close', releaseRequest);
     handle(req, res).catch((e) => {
       console.error(e);
       if (!res.headersSent) legacyError(res, 500, 'internal', e.message, {
@@ -81,4 +97,16 @@ export function createApp(db) {
       });
     });
   });
+  // A process can own a temporary database (notably in the two-instance
+  // deployment). Release its SQLite, WAL, and shared-memory handles as soon
+  // as the HTTP listener is closed so the database directory can be removed.
+  // When there is no active request, release it synchronously too: callers
+  // may close a listener and immediately remove its temporary database.
+  const closeServer = server.close.bind(server);
+  server.close = (...args) => {
+    if (activeRequests === 0) closeDatabase();
+    return closeServer(...args);
+  };
+  server.on('close', closeDatabase);
+  return server;
 }
