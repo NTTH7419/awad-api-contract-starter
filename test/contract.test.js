@@ -12,6 +12,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { open } from '../src/db.js';
 import { startApp } from './helpers.js';
+import { fileURLToPath } from 'node:url';
 
 const TYPE = 'https://menu.example/problems/';
 const LEAK = /sqlite|no such table|constraint failed|\bSELECT\b|\bINSERT\b|\/src\/|\.js:\d+|\n\s+at /i;
@@ -331,7 +332,7 @@ describe('§5 versions and the legacy API', () => {
 describe('§4 two instances, one database (as in session 4)', () => {
   // Two real server processes — `node src/server.js` — on one database file.
   // Anything kept in the memory of one process is invisible to the other.
-  const ROOT = new URL('..', import.meta.url).pathname;
+  const ROOT = fileURLToPath(new URL('..', import.meta.url));
   const dir = mkdtempSync(join(tmpdir(), 'contract-'));
   const env = { ...process.env, DB_PATH: join(dir, 'app.db') };
   const procs = [];
